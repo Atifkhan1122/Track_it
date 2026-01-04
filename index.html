@@ -6,16 +6,18 @@
     <title>FleetControl - Live Admin</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        :root { --dark: #001f3f; --accent: #2ecc71; --danger: #e74c3c; }
+        :root { --dark: #001f3f; --accent: #2ecc71; --danger: #e74c3c; --blue: #3498db; }
         body { font-family: sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; }
         .header { background: var(--dark); color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; }
         .main-container { display: flex; flex: 1; }
         #map { flex: 1; background: #e5e3df; }
         .sidebar { width: 280px; background: #f8f9fa; border-left: 1px solid #ddd; padding: 20px; overflow-y: auto; }
         .status-card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        #car-img { width: 100%; margin-top: 10px; border-radius: 5px; display: none; border: 1px solid #ddd; }
-        .btn-photo { background: var(--accent); color: white; border: none; padding: 10px; border-radius: 5px; cursor: pointer; width: 100%; font-weight: bold; margin-top: 10px; }
-        /* Alert Styling */
+        #car-img { width: 100%; margin-top: 15px; border-radius: 5px; display: none; border: 2px solid #ddd; }
+        .btn-group { display: flex; gap: 5px; margin-top: 10px; }
+        .btn-photo { color: white; border: none; padding: 10px; border-radius: 5px; cursor: pointer; flex: 1; font-weight: bold; font-size: 12px; }
+        .btn-front { background: var(--blue); }
+        .btn-back { background: var(--accent); }
         #alert-msg { background: var(--danger); color: white; padding: 10px; border-radius: 5px; margin-bottom: 10px; display: none; font-weight: bold; text-align: center; animation: blink 1s infinite; }
         @keyframes blink { 50% { opacity: 0.7; } }
     </style>
@@ -38,7 +40,10 @@
             <p><b>Speed:</b> <span id="v-speed">0</span> km/h</p>
             <p><b>Last Update:</b> <span id="v-time">-</span></p>
             <hr>
-            <button class="btn-photo" onclick="takePhoto()">📸 Request Live Photo</button>
+            <div class="btn-group">
+                <button class="btn-photo btn-front" onclick="takePhoto('front')">🤳 Front Photo</button>
+                <button class="btn-photo btn-back" onclick="takePhoto('back')">📷 Back Photo</button>
+            </div>
             <img id="car-img" src="">
         </div>
     </div>
@@ -74,16 +79,15 @@
     }).addTo(map);
 
     let marker = L.marker([ghar_lat, ghar_lng]).addTo(map).bindPopup("Gari ki Location");
-
     const alertSound = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
 
-    // Command Function (Fixed placement)
-    window.takePhoto = function() {
-        set(ref(db, 'commands/car_01/action'), "take_photo");
-        alert("Command Sent!");
+    // Naya Photo Function (Front/Back)
+    window.takePhoto = function(mode) {
+        const cmd = mode === 'front' ? "take_photo_front" : "take_photo_back";
+        set(ref(db, 'commands/car_01/action'), cmd);
+        alert(mode.toUpperCase() + " camera request sent!");
     };
 
-    // Live Data Listener (Fixed brackets and logic)
     onValue(ref(db, 'vehicles/car_01'), (snapshot) => {
         const v = snapshot.val();
         if (v && v.lat && v.lng) {
@@ -94,29 +98,23 @@
             marker.setLatLng([v.lat, v.lng]);
             map.panTo([v.lat, v.lng]);
 
-            // UI Update
             document.getElementById('v-speed').innerText = v.speed || 0;
             document.getElementById('v-time').innerText = v.last_seen || '-';
 
-            // Geofence Logic
             if (distance > geofence_radius) {
                 document.getElementById('alert-msg').style.display = "block";
-                document.getElementById('alert-msg').innerText = `⚠️ ALERT: Gari Boundary se ${Math.round(distance - geofence_radius)}m Bahar Hai!`;
                 safeZone.setStyle({color: 'red', fillColor: 'red'});
-                alertSound.play().catch(e => console.log("Sound enabled after click"));
+                alertSound.play().catch(e => {});
             } else {
                 document.getElementById('alert-msg').style.display = "none";
                 safeZone.setStyle({color: '#3498db', fillColor: '#3498db'});
             }
 
-            // Photo Update
             if (v.photo) {
                 const img = document.getElementById('car-img');
                 img.src = v.photo;
                 img.style.display = "block";
             }
-        } else {
-            console.log("Waiting for data from driver...");
         }
     });
 </script>
