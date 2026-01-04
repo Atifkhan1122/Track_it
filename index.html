@@ -50,31 +50,54 @@
         projectId: "mytrecker2-b3535",
         appId: "1:638221551050:web:a3e08991be7c5fe0aabb33"
     };
+const ghar_lat = 25.4147; 
+const ghar_lng = 68.3442;
+const geofence_radius = 500; // 500 meters ka dayra
+// -------------------------------------------------------
 
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
+// Map ko aapke ghar par set karna
+const map = L.map('map').setView([ghar_lat, ghar_lng], 16); // 16 zoom level behtar hai 500m ke liye
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-    // Map initialize (Mobile coordinates: 25.4151, 68.3444)
-    const map = L.map('map').setView([25.4151, 68.3444], 13);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-    
-    let marker = L.marker([25.4151, 68.3444]).addTo(map).bindPopup("Gari Yahan Hai");
+// Blue Circle: Safe Zone (500m)
+const safeZone = L.circle([ghar_lat, ghar_lng], {
+    radius: geofence_radius,
+    color: '#3498db',
+    fillColor: '#3498db',
+    fillOpacity: 0.2
+}).addTo(map);
 
-    // Command for photo
-    window.takePhoto = function() {
-        set(ref(db, 'commands/car_01/action'), "take_photo");
-        alert("Command Sent!");
-    };
+// Driver Marker
+let marker = L.marker([ghar_lat, ghar_lng]).addTo(map).bindPopup("Gari ki Location");
 
-    // Listen to Firebase
-    const vehicleRef = ref(db, 'vehicles/car_01');
-    onValue(vehicleRef, (snapshot) => {
-        const v = snapshot.val();
-        if (v && v.lat && v.lng) {
-            // Move marker and map
-            const pos = [v.lat, v.lng];
-            marker.setLatLng(pos);
-            map.panTo(pos);
+// Alert Sound
+const alertSound = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
+
+onValue(ref(db, 'vehicles/car_01'), (snapshot) => {
+    const v = snapshot.val();
+    if (v && v.lat && v.lng) {
+        const vehiclePos = L.latLng(v.lat, v.lng);
+        const homePos = L.latLng(ghar_lat, ghar_lng);
+        const distance = homePos.distanceTo(vehiclePos); // Meters mein fasla
+
+        marker.setLatLng([v.lat, v.lng]);
+        
+        // Agar gari 500m se bahar jaye
+        if (distance > geofence_radius) {
+            document.getElementById('alert-msg').style.display = "block";
+            document.getElementById('alert-msg').innerText = `⚠️ ALERT: Gari Boundary se ${Math.round(distance - geofence_radius)}m Bahar Hai!`;
+            
+            // Map Circle laal ho jayega
+            safeZone.setStyle({color: 'red', fillColor: 'red'});
+            
+            // Sound bajao (Agar browser permission ho)
+            alertSound.play().catch(e => console.log("Sound play karne ke liye page par click karen"));
+        } else {
+            document.getElementById('alert-msg').style.display = "none";
+            safeZone.setStyle({color: '#3498db', fillColor: '#3498db'});
+        }
+    }
+});
 
             // Update UI
             document.getElementById('v-speed').innerText = v.speed || 0;
@@ -93,3 +116,4 @@
 </script>
 </body>
 </html>
+
