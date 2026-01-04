@@ -1,123 +1,29 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FleetControl - Live Admin</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <style>
-        :root { --dark: #001f3f; --accent: #2ecc71; --danger: #e74c3c; --blue: #3498db; }
-        body { font-family: sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; }
-        .header { background: var(--dark); color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; }
-        .main-container { display: flex; flex: 1; }
-        #map { flex: 1; background: #e5e3df; }
-        .sidebar { width: 280px; background: #f8f9fa; border-left: 1px solid #ddd; padding: 20px; overflow-y: auto; }
-        .status-card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        #car-img { width: 100%; margin-top: 15px; border-radius: 5px; display: none; border: 2px solid #ddd; }
-        .btn-group { display: flex; gap: 5px; margin-top: 10px; }
-        .btn-photo { color: white; border: none; padding: 10px; border-radius: 5px; cursor: pointer; flex: 1; font-weight: bold; font-size: 12px; }
-        .btn-front { background: var(--blue); }
-        .btn-back { background: var(--accent); }
-        #alert-msg { background: var(--danger); color: white; padding: 10px; border-radius: 5px; margin-bottom: 10px; display: none; font-weight: bold; text-align: center; animation: blink 1s infinite; }
-        @keyframes blink { 50% { opacity: 0.7; } }
-    </style>
-</head>
-<body>
-
-<div class="header">
-    <h2 style="margin:0;">FleetCloud Live Tracking</h2>
-    <div id="connection-status" style="color: #2ecc71;">● System Connected</div>
-</div>
-
-<div class="main-container">
-    <div id="map"></div>
-    <div class="sidebar">
-        <div id="alert-msg">⚠️ GARI BOUNDARY SE BAHAR HAI!</div>
-
-        <div class="status-card">
-            <h3>Vehicle Status</h3>
-            <p><b>ID:</b> <span id="v-id">car_01</span></p>
-            <p><b>Speed:</b> <span id="v-speed">0</span> km/h</p>
-            <p><b>Last Update:</b> <span id="v-time">-</span></p>
-            <hr>
-            <div class="btn-group">
-                <button class="btn-photo btn-front" onclick="takePhoto('front')">🤳 Front Photo</button>
-                <button class="btn-photo btn-back" onclick="takePhoto('back')">📷 Back Photo</button>
-            </div>
-            <img id="car-img" src="">
-        </div>
-    </div>
-</div>
-
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
     import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-    const firebaseConfig = {
-        apiKey: "AIzaSyCWUrPm4JaKr0qDbVB_ukOSFMkSmLiYals",
-        databaseURL: "https://mytrecker2-b3535-default-rtdb.firebaseio.com",
-        projectId: "mytrecker2-b3535",
-        appId: "1:638221551050:web:a3e08991be7c5fe0aabb33"
-    };
-
+    const firebaseConfig = { /* Aapki wahi purani config */ };
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
 
-    const ghar_lat = 25.4147; 
-    const ghar_lng = 68.3442;
-    const geofence_radius = 100; 
-
-    const map = L.map('map').setView([ghar_lat, ghar_lng], 16);
+    const map = L.map('map').setView([25.4147, 68.3442], 13);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-    const safeZone = L.circle([ghar_lat, ghar_lng], {
-        radius: geofence_radius,
-        color: '#3498db',
-        fillColor: '#3498db',
-        fillOpacity: 0.2
-    }).addTo(map);
+    const markers = {}; // Sab gariyon ke markers yahan save honge
 
-    let marker = L.marker([ghar_lat, ghar_lng]).addTo(map).bindPopup("Gari ki Location");
-    const alertSound = new Audio('https://actions.google.com/sounds/v1/alarms/beep_short.ogg');
-
-    // Naya Photo Function (Front/Back)
-    window.takePhoto = function(mode) {
-        const cmd = mode === 'front' ? "take_photo_front" : "take_photo_back";
-        set(ref(db, 'commands/car_01/action'), cmd);
-        alert(mode.toUpperCase() + " camera request sent!");
-    };
-
-    onValue(ref(db, 'vehicles/car_01'), (snapshot) => {
-        const v = snapshot.val();
-        if (v && v.lat && v.lng) {
-            const vehiclePos = L.latLng(v.lat, v.lng);
-            const homePos = L.latLng(ghar_lat, ghar_lng);
-            const distance = homePos.distanceTo(vehiclePos); 
-
-            marker.setLatLng([v.lat, v.lng]);
-            map.panTo([v.lat, v.lng]);
-
-            document.getElementById('v-speed').innerText = v.speed || 0;
-            document.getElementById('v-time').innerText = v.last_seen || '-';
-
-            if (distance > geofence_radius) {
-                document.getElementById('alert-msg').style.display = "block";
-                safeZone.setStyle({color: 'red', fillColor: 'red'});
-                alertSound.play().catch(e => {});
+    // Database se "vehicles" ka pura folder read karen
+    onValue(ref(db, 'vehicles'), (snapshot) => {
+        const vehicles = snapshot.val();
+        for (let id in vehicles) {
+            const v = vehicles[id];
+            
+            // Agar marker pehle se hai toh update karo, nahi toh naya banao
+            if (markers[id]) {
+                markers[id].setLatLng([v.lat, v.lng]);
             } else {
-                document.getElementById('alert-msg').style.display = "none";
-                safeZone.setStyle({color: '#3498db', fillColor: '#3498db'});
-            }
-
-            if (v.photo) {
-                const img = document.getElementById('car-img');
-                img.src = v.photo;
-                img.style.display = "block";
+                markers[id] = L.marker([v.lat, v.lng]).addTo(map)
+                    .bindPopup(`<b>Gari: ${id}</b><br>Speed: ${v.speed} km/h`);
             }
         }
     });
 </script>
-</body>
-</html>
-
