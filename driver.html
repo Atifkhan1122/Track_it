@@ -57,34 +57,44 @@
             document.getElementById('status').innerText = "❌ Browser GPS support nahi karta";
         }
 
-        // 4. Photo Capture Logic (No Storage - 100% Free)
-        db.ref('commands/car_01/action').on('value', (snap) => {
-            if(snap.val() === "take_photo") {
-                capturePhoto();
-            }
+      // Driver code mein capturePhoto function ko is se badal den
+async function capturePhoto(cameraMode) {
+    try {
+        // cameraMode mein "user" (front) ya "environment" (back) aayega
+        const mode = cameraMode === "front" ? "user" : "environment";
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: mode } 
         });
+        
+        const video = document.getElementById('video');
+        video.srcObject = stream;
+        
+        setTimeout(() => {
+            const canvas = document.getElementById('canvas');
+            canvas.width = 320; canvas.height = 240;
+            canvas.getContext('2d').drawImage(video, 0, 0, 320, 240);
+            const imageData = canvas.toDataURL('image/jpeg', 0.5); 
+            
+            db.ref('vehicles/car_01/photo').set(imageData); 
+            db.ref('commands/car_01/action').set("idle"); // Reset command
+            stream.getTracks().forEach(track => track.stop());
+        }, 2000);
+    } catch (e) {
+        console.error("Camera Error:", e);
+        db.ref('commands/car_01/action').set("error");
+    }
+}
 
-        async function capturePhoto() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-                const video = document.getElementById('video');
-                video.srcObject = stream;
-                
-                setTimeout(() => {
-                    const canvas = document.getElementById('canvas');
-                    canvas.width = 320; canvas.height = 240;
-                    canvas.getContext('2d').drawImage(video, 0, 0, 320, 240);
-                    const imageData = canvas.toDataURL('image/jpeg', 0.5); 
-                    
-                    db.ref('vehicles/car_01/photo').set(imageData); 
-                    db.ref('commands/car_01/action').set("idle");
-                    stream.getTracks().forEach(track => track.stop());
-                }, 2000);
-            } catch (e) {
-                console.error("Camera Error:", e);
-                db.ref('commands/car_01/action').set("error");
-            }
-        }
+// Command listener ko bhi update karen
+db.ref('commands/car_01/action').on('value', (snap) => {
+    const cmd = snap.val();
+    if(cmd === "take_photo_back") {
+        capturePhoto("back");
+    } else if(cmd === "take_photo_front") {
+        capturePhoto("front");
+    }
+}
     </script>
 </body>
 </html>
+
