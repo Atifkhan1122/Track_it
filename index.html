@@ -3,67 +3,49 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FleetControl - Professional Admin</title>
-    
+    <title>FleetControl - Live Admin</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
-        :root { --dark: #001f3f; --accent: #2ecc71; --danger: #e74c3c; }
-        body { font-family: 'Segoe UI', sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
-        
-        /* Header & Control Bar */
-        .header { background: var(--dark); color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.3); }
-        .btn-photo { background: var(--accent); color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; }
-        .btn-photo:hover { background: #27ae60; }
-
-        /* Main Content Layout */
+        :root { --dark: #001f3f; --accent: #2ecc71; }
+        body { font-family: sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; }
+        .header { background: var(--dark); color: white; padding: 15px; display: flex; justify-content: space-between; align-items: center; }
         .main-container { display: flex; flex: 1; }
-        #map { flex: 1; height: 100%; }
-
-        /* Sidebar for Photos & Status */
-        .sidebar { width: 300px; background: #f4f4f4; border-left: 2px solid #ddd; padding: 15px; display: flex; flex-direction: column; gap: 15px; overflow-y: auto; }
-        .photo-box { background: white; padding: 10px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); text-align: center; }
-        #car-img { width: 100%; border-radius: 5px; margin-top: 10px; display: none; border: 2px solid #ddd; }
-        
-        /* Alerts */
-        .alert-active { background: #fdeaea; border: 1px solid var(--danger); color: var(--danger); padding: 10px; border-radius: 5px; font-weight: bold; display: none; animation: blink 1s infinite; }
-        @keyframes blink { 50% { opacity: 0.5; } }
+        #map { flex: 1; background: #e5e3df; }
+        .sidebar { width: 280px; background: #f8f9fa; border-left: 1px solid #ddd; padding: 20px; }
+        .status-card { background: white; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        #car-img { width: 100%; margin-top: 10px; border-radius: 5px; display: none; border: 1px solid #ddd; }
+        .btn-photo { background: var(--accent); color: white; border: none; padding: 10px; border-radius: 5px; cursor: pointer; width: 100%; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div class="header">
-    <h1>FleetCloud Live Tracking</h1>
-    <button class="btn-photo" onclick="takePhoto()">📸 Request Live Photo</button>
+    <h2 style="margin:0;">FleetCloud Live Tracking</h2>
+    <div id="connection-status" style="color: #2ecc71;">● System Connected</div>
 </div>
 
 <div class="main-container">
     <div id="map"></div>
-    
     <div class="sidebar">
-        <h3>Vehicle Status</h3>
-        <div id="alert-msg" class="alert-active">⚠️ OUT OF BOUNDS!</div>
-        
-        <div id="vehicle-info">
-            <p><b>Gari ID:</b> <span id="v-id">None</span></p>
+        <div class="status-card">
+            <h3>Vehicle Status</h3>
+            <p><b>ID:</b> <span id="v-id">car_01</span></p>
             <p><b>Speed:</b> <span id="v-speed">0</span> km/h</p>
-            <p><b>Last Seen:</b> <span id="v-time">-</span></p>
-        </div>
-
-        <div class="photo-box">
-            <b>Latest Photo</b>
-            <img id="car-img" src="" alt="Vehicle Capture">
-            <p id="no-photo" style="color: #888;">No photo captured yet.</p>
+            <p><b>Last Update:</b> <span id="v-time">-</span></p>
+            <hr>
+            <button class="btn-photo" onclick="takePhoto()">📸 Request Live Photo</button>
+            <img id="car-img" src="">
         </div>
     </div>
 </div>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
     import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
     const firebaseConfig = {
         apiKey: "AIzaSyCWUrPm4JaKr0qDbVB_ukOSFMkSmLiYals",
-        authDomain: "mytrecker2-b3535.firebaseapp.com",
         databaseURL: "https://mytrecker2-b3535-default-rtdb.firebaseio.com",
         projectId: "mytrecker2-b3535",
         appId: "1:638221551050:web:a3e08991be7c5fe0aabb33"
@@ -72,56 +54,42 @@
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
 
-    // Map Setup
-    const map = L.map('map').setView([24.8607, 67.0011], 13);
+    // Map initialize (Mobile coordinates: 25.4151, 68.3444)
+    const map = L.map('map').setView([25.4151, 68.3444], 13);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    
+    let marker = L.marker([25.4151, 68.3444]).addTo(map).bindPopup("Gari Yahan Hai");
 
-    // Geofence Circle (5KM radius from Karachi center)
-    const geofenceCenter = [24.8607, 67.0011];
-    L.circle(geofenceCenter, { radius: 5000, color: 'red', fillOpacity: 0.1 }).addTo(map);
-
-    let marker;
-
-    // Command Function (Attached to window for HTML button)
+    // Command for photo
     window.takePhoto = function() {
         set(ref(db, 'commands/car_01/action'), "take_photo");
-        alert("Photo request sent to vehicle!");
+        alert("Command Sent!");
     };
 
-    // Listen to Firebase Data
-    onValue(ref(db, 'vehicles/car_01'), (snapshot) => {
+    // Listen to Firebase
+    const vehicleRef = ref(db, 'vehicles/car_01');
+    onValue(vehicleRef, (snapshot) => {
         const v = snapshot.val();
-        if (!v) return;
+        if (v && v.lat && v.lng) {
+            // Move marker and map
+            const pos = [v.lat, v.lng];
+            marker.setLatLng(pos);
+            map.panTo(pos);
 
-        // 1. Update Map
-        if (!marker) {
-            marker = L.marker([v.lat, v.lng]).addTo(map).bindPopup("Car 01");
+            // Update UI
+            document.getElementById('v-speed').innerText = v.speed || 0;
+            document.getElementById('v-time').innerText = v.last_seen || '-';
+
+            // Show photo if available
+            if (v.photo) {
+                const img = document.getElementById('car-img');
+                img.src = v.photo;
+                img.style.display = "block";
+            }
         } else {
-            marker.setLatLng([v.lat, v.lng]);
-        }
-        map.panTo([v.lat, v.lng]);
-
-        // 2. Update Sidebar Info
-        document.getElementById('v-id').innerText = "car_01";
-        document.getElementById('v-speed').innerText = v.speed || 0;
-        document.getElementById('v-time').innerText = v.last_seen || '-';
-
-        // 3. Update Photo (Base64 Free Method)
-        if (v.photo) {
-            document.getElementById('car-img').src = v.photo;
-            document.getElementById('car-img').style.display = "block";
-            document.getElementById('no-photo').style.display = "none";
-        }
-
-        // 4. Geofence Alert logic
-        const dist = map.distance([v.lat, v.lng], geofenceCenter);
-        if (dist > 5000) {
-            document.getElementById('alert-msg').style.display = "block";
-        } else {
-            document.getElementById('alert-msg').style.display = "none";
+            console.log("Waiting for data from driver...");
         }
     });
 </script>
-
 </body>
 </html>
