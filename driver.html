@@ -1,115 +1,21 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Driver Tracker - Background Mode</title>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <title>Driver App Status</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        body { background: #000; color: #0f0; text-align: center; font-family: sans-serif; padding: 20px; }
-        .btn-start { background: #27ae60; color: white; border: none; padding: 15px 30px; border-radius: 50px; font-weight: bold; font-size: 20px; cursor: pointer; margin-top: 20px; }
-        #log { font-size: 12px; color: #666; margin-top: 20px; text-align: left; height: 100px; overflow-y: scroll; border: 1px solid #333; padding: 5px; }
+        body { font-family: sans-serif; background: #222; color: white; text-align: center; padding-top: 50px; }
+        .status-box { border: 2px solid #00c851; padding: 20px; display: inline-block; border-radius: 15px; }
+        .pulse { animation: pulse-animation 2s infinite; color: #00c851; font-weight: bold; }
+        @keyframes pulse-animation { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
     </style>
 </head>
 <body>
-
-    <h2 id="display-id">Vehicle Tracking</h2>
-    <div id="status" style="font-size: 18px; color: #f1c40f;">Click START to Enable Background Tracking</div>
-    
-    <button class="btn-start" onclick="initTracking()">🚀 START TRACKING</button>
-
-    <div id="log">System Ready...</div>
-
-    <video id="video" style="display:none;" autoplay></video>
-    <canvas id="canvas" style="display:none;"></canvas>
-
-    <script>
-        const firebaseConfig = {
-            apiKey: "AIzaSyCWUrPm4JaKr0qDbVB_ukOSFMkSmLiYals",
-            databaseURL: "https://mytrecker2-b3535-default-rtdb.firebaseio.com",
-            projectId: "mytrecker2-b3535",
-        };
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.database();
-
-        let vehicleID = localStorage.getItem("v_id") || prompt("Gari ka ID likhen (e.g. Car-01):");
-        if (vehicleID) {
-            localStorage.setItem("v_id", vehicleID);
-            document.getElementById('display-id').innerText = "Vehicle: " + vehicleID;
-        }
-
-        let wakeLock = null;
-
-        // --- BACKGROUND LOGIC ---
-        async function initTracking() {
-            // 1. Request Screen Wake Lock (Iski wajah se browser sleep nahi karega)
-            try {
-                if ('wakeLock' in navigator) {
-                    wakeLock = await navigator.wakeLock.request('screen');
-                    addLog("✅ Wake Lock Active: Screen won't sleep");
-                }
-            } catch (err) {
-                addLog("⚠️ Wake Lock Error: " + err.message);
-            }
-
-            // 2. Start GPS Tracking
-            if ("geolocation" in navigator) {
-                navigator.geolocation.watchPosition((pos) => {
-                    const data = {
-                        lat: pos.coords.latitude,
-                        lng: pos.coords.longitude,
-                        speed: Math.round(pos.coords.speed * 3.6) || 0,
-                        last_seen: new Date().toLocaleTimeString()
-                    };
-                    
-                    db.ref('vehicles/' + vehicleID).update(data);
-                    document.getElementById('status').innerText = "🟢 Tracking Active (Running in Background)";
-                    addLog(`Update: ${data.lat.toFixed(4)}, ${data.lng.toFixed(4)}`);
-                }, (err) => {
-                    addLog("❌ GPS Error: " + err.message);
-                }, { 
-                    enableHighAccuracy: true,
-                    maximumAge: 0,
-                    timeout: 10000 
-                });
-            }
-
-            // 3. Keep the app awake (Anti-Idle)
-            setInterval(() => {
-                db.ref('vehicles/' + vehicleID + '/heartbeat').set(Date.now());
-            }, 30000);
-        }
-
-        function addLog(msg) {
-            const logDiv = document.getElementById('log');
-            logDiv.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${msg}</div>`;
-            logDiv.scrollTop = logDiv.scrollHeight;
-        }
-
-        // Camera commands logic...
-        db.ref('commands/' + vehicleID + '/action').on('value', (snap) => {
-            const cmd = snap.val();
-            if(cmd === "take_photo_front") capturePhoto("user");
-            if(cmd === "take_photo_back") capturePhoto("environment");
-        });
-
-        async function capturePhoto(mode) {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: mode } });
-                const video = document.getElementById('video');
-                video.srcObject = stream;
-                setTimeout(() => {
-                    const canvas = document.getElementById('canvas');
-                    canvas.width = 320; canvas.height = 240;
-                    canvas.getContext('2d').drawImage(video, 0, 0, 320, 240);
-                    db.ref('vehicles/' + vehicleID + '/photo').set(canvas.toDataURL('image/jpeg', 0.5));
-                    db.ref('commands/' + vehicleID + '/action').set("idle");
-                    stream.getTracks().forEach(t => t.stop());
-                }, 2000);
-            } catch (e) { addLog("Camera Error"); }
-        }
-    </script>
+    <div class="status-box">
+        <h1>GariTracker</h1>
+        <p class="pulse">● SYSTEM LIVE</p>
+        <p>Gari-01 ka tracker active hai.</p>
+        <small>App ko background mein chalne dein.</small>
+    </div>
 </body>
 </html>
-
